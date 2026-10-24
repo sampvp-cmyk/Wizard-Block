@@ -87,8 +87,8 @@ function roundCount(game) {
   const n = game.players.length;
   if (!n) return 0;
   if (game.roundsMode === "custom") return Math.max(1, game.customRounds || 1);
-  if (game.roundsMode === "all") return Math.floor(EDITIONS[game.edition].deck / n);
-  return Math.floor(60 / n);
+  if (game.roundsMode === "all") return Math.max(1, Math.floor(EDITIONS[game.edition].deck / n));
+  return Math.max(1, Math.floor(60 / n));
 }
 
 // Spieler an letzter Stelle gibt in Runde 1, danach wandert der Geber reihum.
@@ -310,7 +310,7 @@ function NewGame({ onCancel, onCreate, knownNames }) {
 
   const create = () => {
     if (!name.trim()) return setError("Du musst einen Namen eingeben.");
-    if (n < 3 || n > 6) return setError("Wizard spielt man mit 3 bis 6 Spielern.");
+    if (n < 3) return setError("Wizard spielt man mit mindestens 3 Spielern.");
     if (new Set(clean.map((p) => p.toLowerCase())).size !== n) return setError("Jeder Spieler braucht einen eigenen Namen.");
     onCreate({ id: String(Date.now()), name: name.trim(), rule, edition, roundsMode, customRounds, players: clean, rounds: [], created: Date.now() });
   };
@@ -328,7 +328,7 @@ function NewGame({ onCancel, onCreate, knownNames }) {
         <Row onClick={() => setSheet("rounds")} last><span style={{ flex: 1 }}>Rundenanzahl</span><span style={{ color: C.dim }}>{roundsLabel}{n >= 3 ? ` (${roundCount(preview)})` : ""} ›</span></Row>
       </Section>
 
-      <Section title="Spieler" footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt. Der Spieler an letzter Stelle ist in Runde 1 der Geber.">
+      <Section title="Spieler" footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt. Der Spieler an letzter Stelle ist in Runde 1 der Geber. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
         {players.map((p, i) => (
           <Row key={i}>
             <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
@@ -338,7 +338,7 @@ function NewGame({ onCancel, onCreate, knownNames }) {
             <button aria-label="Nach unten" onClick={() => move(i, 1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▼</button>
           </Row>
         ))}
-        {players.length < 6 && (
+        {(
           <Row onClick={() => setPlayers([...players, ""])} last>
             <span style={{ width: 26, height: 26, borderRadius: 13, background: C.good, color: "#fff", fontSize: 18, lineHeight: "26px", textAlign: "center" }}>+</span>
             <span style={{ color: C.good }}>Neuen Spieler hinzufügen</span>
@@ -365,7 +365,7 @@ function NewGame({ onCancel, onCreate, knownNames }) {
       )}
       {sheet === "rounds" && (
         <Sheet title="Wähle die Rundenanzahl" onClose={() => setSheet(null)}>
-          <Choice label="Standard" desc="60 Karten ÷ Spieler (3 → 20, 4 → 15, 5 → 12, 6 → 10 Runden)" selected={roundsMode === "standard"} onClick={() => { setRoundsMode("standard"); setSheet(null); }} />
+          <Choice label="Standard" desc="60 Karten ÷ Spieler (3 → 20, 4 → 15, 5 → 12, 6 → 10, 7 → 8, 8 → 7 Runden …)" selected={roundsMode === "standard"} onClick={() => { setRoundsMode("standard"); setSheet(null); }} />
           <Choice label="Alle Karten verteilen" desc={`Alle ${EDITIONS[edition].deck} Karten der Edition werden verteilt.`} selected={roundsMode === "all"} onClick={() => { setRoundsMode("all"); setSheet(null); }} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, border: `2px solid ${roundsMode === "custom" ? C.accent : C.line}`, background: C.card }}>
             <div style={{ flex: 1 }} onClick={() => setRoundsMode("custom")}>
