@@ -91,8 +91,9 @@ function roundCount(game) {
   return Math.max(1, Math.floor(60 / n));
 }
 
-// Spieler an letzter Stelle gibt in Runde 1, danach wandert der Geber reihum.
-const dealerOf = (game, r) => (game.players.length - 1 + r) % game.players.length;
+// Der erste Spieler gibt in Runde 1, danach wandert der Geber reihum.
+// Ältere Spiele (ohne dealerFirst) hatten den Geber an letzter Stelle.
+const dealerOf = (game, r) => ((game.dealerFirst ? 0 : game.players.length - 1) + r) % game.players.length;
 
 const effectiveBid = (round, p) =>
   round.bids[p] + (round.cloud && round.cloud.player === p ? round.cloud.delta : 0);
@@ -342,7 +343,7 @@ function PlayerRows({ players, setPlayers, showDealer }) {
   const [drag, setDrag] = useState(null);
   const setPlayer = (i, v) => setPlayers(players.map((p, j) => (j === i ? v : p)));
   // Geber ist immer der Letzte: Reihe so drehen, dass Spieler i unten steht – die Sitzreihenfolge bleibt gleich
-  const makeDealer = (i) => setPlayers([...players.slice(i + 1), ...players.slice(0, i + 1)]);
+  const makeDealer = (i) => setPlayers([...players.slice(i), ...players.slice(0, i)]);
 
   const startDrag = (i) => (e) => {
     e.preventDefault();
@@ -374,7 +375,7 @@ function PlayerRows({ players, setPlayers, showDealer }) {
           <Row>
             <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
             <input style={textInput} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => setPlayer(i, e.target.value)} />
-            {showDealer && p.trim() && (i === players.length - 1
+            {showDealer && p.trim() && (i === players.findIndex((x) => x.trim())
               ? <span style={{ fontSize: 12, fontWeight: 600, color: "#1b1c3a", background: C.gold, borderRadius: 10, padding: "3px 8px" }}>Geber</span>
               : <button aria-label={`${p} als Geber`} onClick={() => makeDealer(i)}
                   style={{ fontSize: 12, color: C.dim, background: "transparent", border: `1px solid ${C.line}`, borderRadius: 10, padding: "2px 8px", cursor: "pointer" }}>Geber</button>)}
@@ -413,7 +414,7 @@ function NewGame({ defaults, onCancel, onCreate, knownNames }) {
     if (!name.trim()) return setError("Du musst einen Namen eingeben.");
     if (n < 3) return setError("Wizard spielt man mit mindestens 3 Spielern.");
     if (new Set(clean.map((p) => p.toLowerCase())).size !== n) return setError("Jeder Spieler braucht einen eigenen Namen.");
-    onCreate({ id: String(Date.now()), name: name.trim(), ...opts, players: clean, rounds: [], created: Date.now() });
+    onCreate({ id: String(Date.now()), name: name.trim(), ...opts, players: clean, dealerFirst: true, rounds: [], created: Date.now() });
   };
 
   return (
@@ -440,7 +441,7 @@ function NewGame({ defaults, onCancel, onCreate, knownNames }) {
         </div>
       )}
 
-      <Section title={`Spieler (${n})`} footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt – mit ⠿ kannst du sie verschieben. Der Spieler an letzter Stelle ist in Runde 1 der Geber – tippe bei einem anderen auf „Geber“, dann rutscht die Reihe entsprechend nach. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
+      <Section title={`Spieler (${n})`} footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt – mit ⠿ kannst du sie verschieben. Der Spieler ganz oben ist in Runde 1 der Geber – tippe bei einem anderen auf „Geber“, dann rutscht er nach oben und die Reihe rückt entsprechend nach. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
         <PlayerRows players={players} setPlayers={(p) => { setPlayers(p); setError(""); }} showDealer />
       </Section>
       <datalist id="known-names">{knownNames.map((k) => <option key={k} value={k} />)}</datalist>
@@ -629,7 +630,7 @@ function RoundView({ game, r, onSave, onDraft, onClose }) {
     onSave(r, saved, goNext && !last ? r + 1 : null);
   };
 
-  const order = Array.from({ length: n }, (_, i) => (dealer + 1 + i) % n); // Ansage beginnt links vom Geber
+  const order = Array.from({ length: n }, (_, i) => (dealer + i) % n); // Geber oben, danach reihum in Sitzreihenfolge
 
   const nameCell = (p) => (
     <div style={{ flex: 1, minWidth: 0 }}>
