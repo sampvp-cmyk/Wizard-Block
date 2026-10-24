@@ -87,8 +87,9 @@ function roundCount(game) {
   const n = game.players.length;
   if (!n) return 0;
   if (game.roundsMode === "custom") return Math.max(1, game.customRounds || 1);
-  if (game.roundsMode === "all") return Math.max(1, Math.floor(EDITIONS[game.edition].deck / n));
-  return Math.max(1, Math.floor(60 / n));
+  const decks = game.decks || 1; // ab 7 Spielern kann mit zwei Decks gespielt werden
+  if (game.roundsMode === "all") return Math.max(1, Math.floor((EDITIONS[game.edition].deck * decks) / n));
+  return Math.max(1, Math.floor((60 * decks) / n));
 }
 
 // Der letzte Spieler gibt in Runde 1, danach wandert der Geber reihum.
@@ -412,12 +413,16 @@ function NewGame({ defaults, onCancel, onCreate }) {
     else setPlayers([...players.filter((p) => p.trim()), f]);
   };
 
-  const create = () => {
+  const [askDecks, setAskDecks] = useState(false);
+
+  const create = (decks) => {
     if (!name.trim()) return setError("Du musst einen Namen eingeben.");
     if (n < 3) return setError("Wizard spielt man mit mindestens 3 Spielern.");
     if (new Set(clean.map((p) => p.toLowerCase())).size !== n) return setError("Jeder Spieler braucht einen eigenen Namen.");
-    onCreate({ id: String(Date.now()), name: name.trim(), ...opts, players: clean, rounds: [], created: Date.now() });
+    if (n > 6 && !decks) return setAskDecks(true); // mehr Spieler als erlaubt: erst nach den Decks fragen
+    onCreate({ id: String(Date.now()), name: name.trim(), ...opts, decks: decks || 1, players: clean, rounds: [], created: Date.now() });
   };
+  const roundsWith = (decks) => roundCount({ ...opts, players: clean, decks });
 
   return (
     <div style={page} className="pop">
@@ -448,7 +453,20 @@ function NewGame({ defaults, onCancel, onCreate }) {
       </Section>
 
       {error && <div style={{ background: "#f8717122", border: `1px solid ${C.bad}`, color: "#fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 12, textAlign: "center" }}>{error}</div>}
-      <BigButton onClick={create} style={{ width: "100%" }}>Spiel erstellen</BigButton>
+      <BigButton onClick={() => create()} style={{ width: "100%" }}>Spiel erstellen</BigButton>
+
+      {askDecks && (
+        <Sheet title={`${n} Spieler – spielt ihr mit zwei Decks?`} onClose={() => setAskDecks(false)}>
+          <div style={{ color: C.dim, textAlign: "center", marginBottom: 12, lineHeight: 1.4 }}>
+            Wizard ist eigentlich für 3 bis 6 Spieler. Mit mehr Spielern gibt es mit einem Deck nur wenige Runden.
+          </div>
+          <div style={{ background: "#ffcc4d1a", border: "1px solid #ffcc4d55", borderRadius: 14, padding: "12px 14px", marginBottom: 16, fontSize: 14, lineHeight: 1.45 }}>
+            💡 <b>Empfehlung:</b> Nehmt zwei unterschiedliche Decks mit verschiedenen Kartenrückseiten bzw. Farben – zum Beispiel das Standard-Deck und die <b>Wizard Junior Edition</b> dazugemischt. So kann man die Karten nach dem Spiel leicht wieder auseinandersortieren.
+          </div>
+          <Choice label={`🃏🃏 Mit zwei Decks spielen (${roundsWith(2)} Runden)`} onClick={() => { setAskDecks(false); create(2); }} />
+          <Choice label={`🃏 Mit einem Deck weiterspielen (${roundsWith(1)} Runden)`} onClick={() => { setAskDecks(false); create(1); }} />
+        </Sheet>
+      )}
     </div>
   );
 }
@@ -543,6 +561,7 @@ function GameView({ game, onBack, onOpenRound, onDelete, justFinished, onEndSeen
             <Row><span style={{ flex: 1 }}>Regel</span><span style={{ color: C.dim }}>{RULES[game.rule].name}</span></Row>
             <Row><span style={{ flex: 1 }}>Edition</span><span style={{ color: C.dim, textAlign: "right" }}>{EDITIONS[game.edition].name}</span></Row>
             <Row><span style={{ flex: 1 }}>Runden</span><span style={{ color: C.dim }}>{total}</span></Row>
+            <Row><span style={{ flex: 1 }}>Decks</span><span style={{ color: C.dim }}>{game.decks === 2 ? "Zwei Decks" : "Ein Deck"}</span></Row>
             <Row last><span style={{ flex: 1 }}>Erstellt</span><span style={{ color: C.dim }}>{formatDate(game.created)}</span></Row>
           </Section>
           <Section title="Punkte" footer="Richtig angesagt: 20 Punkte + 10 pro Stich. Daneben: −10 Punkte pro Stich Abweichung.">
