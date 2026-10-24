@@ -376,7 +376,7 @@ function PlayerRows({ players, setPlayers, showDealer }) {
           style={{ background: drag === i ? "#8b6cff33" : "transparent", boxShadow: drag === i ? `inset 0 0 0 2px ${C.accent}` : "none", transition: "background .15s" }}>
           <Row>
             <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
-            <input style={textInput} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => setPlayer(i, e.target.value)} />
+            <input style={textInput} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} onChange={(e) => setPlayer(i, e.target.value)} />
             {showDealer && p.trim() && (i === players.map((x) => x.trim()).findLastIndex(Boolean)
               ? <span style={{ fontSize: 12, fontWeight: 600, color: "#1b1c3a", background: C.gold, borderRadius: 10, padding: "3px 8px" }}>Geber</span>
               : <button aria-label={`${p} als Geber`} onClick={() => makeDealer(i)}
@@ -394,7 +394,7 @@ function PlayerRows({ players, setPlayers, showDealer }) {
   );
 }
 
-function NewGame({ defaults, onCancel, onCreate, knownNames }) {
+function NewGame({ defaults, onCancel, onCreate }) {
   const favorites = defaults.players.map((p) => p.trim()).filter(Boolean);
   const [name, setName] = useState(() => formatDate(Date.now()));
   const [opts, setOpts] = useState({ rule: defaults.rule, edition: defaults.edition, roundsMode: defaults.roundsMode, customRounds: defaults.customRounds });
@@ -446,7 +446,6 @@ function NewGame({ defaults, onCancel, onCreate, knownNames }) {
       <Section title={`Spieler (${n})`} footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt – mit ⠿ kannst du sie verschieben. Der Spieler ganz unten ist in Runde 1 der Geber – tippe bei einem anderen auf „Geber“, dann rutscht er nach unten und die Reihe rückt entsprechend nach. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
         <PlayerRows players={players} setPlayers={(p) => { setPlayers(p); setError(""); }} showDealer />
       </Section>
-      <datalist id="known-names">{knownNames.map((k) => <option key={k} value={k} />)}</datalist>
 
       {error && <div style={{ background: "#f8717122", border: `1px solid ${C.bad}`, color: "#fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 12, textAlign: "center" }}>{error}</div>}
       <BigButton onClick={create} style={{ width: "100%" }}>Spiel erstellen</BigButton>
@@ -455,7 +454,7 @@ function NewGame({ defaults, onCancel, onCreate, knownNames }) {
 }
 
 // Änderungen sind erst ein Entwurf und gelten nach „Speichern“
-function Settings({ defaults, setDefaults, onBack, knownNames }) {
+function Settings({ defaults, setDefaults, onBack }) {
   const [draft, setDraft] = useState(defaults);
   const [saved, setSaved] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -472,7 +471,6 @@ function Settings({ defaults, setDefaults, onBack, knownNames }) {
       <Section title="Standardspieler" footer="Standardspieler erscheinen beim neuen Spiel als Liste zum Antippen.">
         <PlayerRows players={draft.players} setPlayers={(players) => edit({ ...draft, players })} />
       </Section>
-      <datalist id="known-names">{knownNames.map((k) => <option key={k} value={k} />)}</datalist>
 
       <BottomBar hint={dirty ? "Nicht gespeicherte Änderungen" : saved ? "Gespeichert ✓" : null} hintColor={dirty ? C.gold : C.good}>
         <BigButton disabled={!dirty} onClick={save}>{dirty || !saved ? "Speichern" : "Gespeichert ✓"}</BigButton>
@@ -491,7 +489,7 @@ function Settings({ defaults, setDefaults, onBack, knownNames }) {
 }
 
 // ── Spielübersicht ────────────────────────────────────────────────────────────
-function GameView({ game, onBack, onOpenRound, onDelete }) {
+function GameView({ game, onBack, onOpenRound, onDelete, justFinished, onEndSeen }) {
   const [tab, setTab] = useState("stand");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const total = roundCount(game);
@@ -560,6 +558,29 @@ function GameView({ game, onBack, onOpenRound, onDelete }) {
             {game.rounds[nextRound] && game.rounds[nextRound].bidsDone ? `Runde ${nextRound + 1}: Ergebnis eintragen` : `Runde ${nextRound + 1} starten`}
           </BigButton>
         </BottomBar>
+      )}
+
+      {justFinished && fin && (
+        <Sheet title="🏆 Spiel beendet!" onClose={onEndSeen}>
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.gold }}>{rank.filter((r) => r.place === 1).map((r) => r.name).join(" & ")}</div>
+            <div style={{ color: C.dim }}>gewinnt mit {rank[0].score} Punkten</div>
+          </div>
+          <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.line}`, marginBottom: 16 }}>
+            {rank.map((r, i) => (
+              <Row key={r.p} last={i === rank.length - 1}>
+                <span style={{ width: 30, textAlign: "center", color: C.dim }}>{medal(r.place)}</span>
+                <span style={{ flex: 1 }}>{r.name}</span>
+                <span style={{ fontWeight: 600, color: r.score < 0 ? C.bad : C.text }}>{r.score}</span>
+              </Row>
+            ))}
+          </div>
+          <div style={{ color: C.dim, textAlign: "center", marginBottom: 12 }}>Was soll mit dem Spiel passieren?</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <BigButton color={C.bad} onClick={onDelete}>🗑 Spiel löschen</BigButton>
+            <BigButton onClick={onEndSeen}>💾 Spiel behalten</BigButton>
+          </div>
+        </Sheet>
       )}
 
       {confirmDelete && (
@@ -774,20 +795,20 @@ function App() {
   const game = view.gameId ? state.games.find((g) => g.id === view.gameId) : null;
   const updateGame = (id, fn) => setState((s) => ({ ...s, games: s.games.map((g) => (g.id === id ? fn(g) : g)) }));
   const defaults = { ...DEFAULTS, ...state.defaults };
-  const knownNames = [...new Set([...defaults.players.map((p) => p.trim()).filter(Boolean), ...state.games.flatMap((g) => g.players)])];
   const list = <GameList games={state.games} onOpen={(id) => setView({ name: "game", gameId: id })} onNew={() => setView({ name: "new" })} onSettings={() => setView({ name: "settings" })} />;
 
   if ((view.name === "game" || view.name === "round") && !game) return list;
 
   if (view.name === "settings")
-    return <Settings defaults={defaults} knownNames={knownNames} setDefaults={(d) => setState((s) => ({ ...s, defaults: d }))} onBack={() => setView({ name: "list" })} />;
+    return <Settings defaults={defaults} setDefaults={(d) => setState((s) => ({ ...s, defaults: d }))} onBack={() => setView({ name: "list" })} />;
 
   if (view.name === "new")
-    return <NewGame defaults={defaults} knownNames={knownNames} onCancel={() => setView({ name: "list" })}
+    return <NewGame defaults={defaults} onCancel={() => setView({ name: "list" })}
       onCreate={(g) => { setState((s) => ({ ...s, games: [...s.games, g] })); setView({ name: "game", gameId: g.id }); }} />;
 
   if (view.name === "game")
-    return <GameView game={game} onBack={() => setView({ name: "list" })} onOpenRound={(r) => setView({ name: "round", gameId: game.id, round: r })}
+    return <GameView game={game} justFinished={view.finished} onEndSeen={() => setView({ name: "game", gameId: game.id })}
+      onBack={() => setView({ name: "list" })} onOpenRound={(r) => setView({ name: "round", gameId: game.id, round: r })}
       onDelete={() => { setState((s) => ({ ...s, games: s.games.filter((g) => g.id !== game.id) })); setView({ name: "list" }); }} />;
 
   if (view.name === "round")
@@ -795,7 +816,9 @@ function App() {
       onDraft={(r, rd) => updateGame(game.id, (g) => { const rounds = [...g.rounds]; rounds[r] = rd; return { ...g, rounds }; })}
       onSave={(r, rd, next) => {
         updateGame(game.id, (g) => { const rounds = [...g.rounds]; rounds[r] = rd; return { ...g, rounds }; });
-        setView(next !== null ? { name: "round", gameId: game.id, round: next } : { name: "game", gameId: game.id });
+        // Nach der letzten Runde fragt das Spielende-Popup, ob das Spiel behalten oder gelöscht wird
+        const lastRound = r === roundCount(game) - 1;
+        setView(next !== null ? { name: "round", gameId: game.id, round: next } : { name: "game", gameId: game.id, finished: lastRound });
       }} />;
 
   return list;
