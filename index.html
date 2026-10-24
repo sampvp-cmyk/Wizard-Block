@@ -260,7 +260,7 @@ function GameList({ games, onOpen, onNew }) {
           <div style={{ fontSize: 64, marginBottom: 12 }}>🔮</div>
           <div style={{ fontSize: 18, color: C.text, marginBottom: 6 }}>Noch keine Spiele</div>
           <div style={{ marginBottom: 24 }}>Leg ein neues Spiel an und los geht's.</div>
-          <BigButton onClick={onNew} style={{ maxWidth: 260 }}>Neues Spiel</BigButton>
+          <BigButton onClick={onNew} style={{ width: "100%", maxWidth: 260 }}>Neues Spiel</BigButton>
         </div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
@@ -321,7 +321,7 @@ function NewGame({ onCancel, onCreate, knownNames }) {
     <div style={page} className="pop">
       <TopBar left={<IconBtn label="Spiele" onClick={onCancel}>‹ Spiele</IconBtn>} title="Neues Spiel" />
       <Section title="Allgemein">
-        <Row><span style={{ color: C.dim, width: 64 }}>Name</span><input style={input} placeholder="z. B. Spieleabend" value={name} onChange={(e) => { setName(e.target.value); setError(""); }} /></Row>
+        <Row><span style={{ color: C.dim, width: 64 }}>Name</span><input style={input} autoComplete="off" placeholder="z. B. Spieleabend" value={name} onChange={(e) => { setName(e.target.value); setError(""); }} /></Row>
         <Row onClick={() => setSheet("rule")}><span style={{ flex: 1 }}>Regel</span><span style={{ color: C.dim }}>{RULES[rule].name} ›</span></Row>
         <Row onClick={() => setSheet("edition")}><span style={{ flex: 1 }}>Edition</span><span style={{ color: C.dim, textAlign: "right" }}>{EDITIONS[edition].name} ›</span></Row>
         <Row onClick={() => setSheet("rounds")} last><span style={{ flex: 1 }}>Rundenanzahl</span><span style={{ color: C.dim }}>{roundsLabel}{n >= 3 ? ` (${roundCount(preview)})` : ""} ›</span></Row>
@@ -331,7 +331,7 @@ function NewGame({ onCancel, onCreate, knownNames }) {
         {players.map((p, i) => (
           <Row key={i}>
             <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
-            <input style={input} placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => { setPlayer(i, e.target.value); setError(""); }} />
+            <input style={input} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => { setPlayer(i, e.target.value); setError(""); }} />
             {i === players.length - 1 && p.trim() && <span style={{ fontSize: 12, color: C.gold }}>Geber</span>}
             <button aria-label="Nach oben" onClick={() => move(i, -1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▲</button>
             <button aria-label="Nach unten" onClick={() => move(i, 1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▼</button>
