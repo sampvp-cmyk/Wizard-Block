@@ -46,7 +46,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script type="text/babel">
 
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 const STORAGE_KEY = "wizard-block-v1";
 
@@ -336,26 +336,47 @@ function GameOptions({ opts, setOpts, playerCount, children }) {
   );
 }
 
-// Bearbeitbare Spielerliste mit Entfernen und Verschieben
-function PlayerRows({ players, setPlayers, showDealer, onEdit }) {
-  const setPlayer = (i, v) => { setPlayers(players.map((p, j) => (j === i ? v : p))); onEdit && onEdit(); };
-  const move = (i, d) => {
-    const j = i + d;
-    if (j < 0 || j >= players.length) return;
-    const next = [...players];
-    [next[i], next[j]] = [next[j], next[i]];
-    setPlayers(next);
+// Bearbeitbare Spielerliste; Reihenfolge per Drag & Drop am Griff ⠿ (Maus und Touch)
+function PlayerRows({ players, setPlayers, showDealer }) {
+  const rowRefs = useRef([]);
+  const [drag, setDrag] = useState(null);
+  const setPlayer = (i, v) => setPlayers(players.map((p, j) => (j === i ? v : p)));
+
+  const startDrag = (i) => (e) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDrag(i);
   };
+  const moveDrag = (e) => {
+    if (drag === null) return;
+    let target = drag;
+    rowRefs.current.forEach((el, j) => {
+      if (!el || j >= players.length) return;
+      const r = el.getBoundingClientRect();
+      if (e.clientY >= r.top && e.clientY <= r.bottom) target = j;
+    });
+    if (target === drag) return;
+    const next = [...players];
+    const [moved] = next.splice(drag, 1);
+    next.splice(target, 0, moved);
+    setPlayers(next);
+    setDrag(target);
+  };
+  const endDrag = () => setDrag(null);
+
   return (
     <>
       {players.map((p, i) => (
-        <Row key={i}>
-          <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
-          <input style={textInput} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => setPlayer(i, e.target.value)} />
-          {showDealer && i === players.length - 1 && p.trim() && <span style={{ fontSize: 12, color: C.gold }}>Geber</span>}
-          <button aria-label="Nach oben" onClick={() => move(i, -1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▲</button>
-          <button aria-label="Nach unten" onClick={() => move(i, 1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▼</button>
-        </Row>
+        <div key={i} ref={(el) => (rowRefs.current[i] = el)}
+          style={{ background: drag === i ? "#8b6cff33" : "transparent", boxShadow: drag === i ? `inset 0 0 0 2px ${C.accent}` : "none", transition: "background .15s" }}>
+          <Row>
+            <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
+            <input style={textInput} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => setPlayer(i, e.target.value)} />
+            {showDealer && i === players.length - 1 && p.trim() && <span style={{ fontSize: 12, color: C.gold }}>Geber</span>}
+            <span aria-label="Verschieben" role="button" onPointerDown={startDrag(i)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+              style={{ touchAction: "none", cursor: drag === null ? "grab" : "grabbing", color: drag === i ? C.text : C.dim, fontSize: 24, lineHeight: 1, padding: "6px 4px 6px 10px", userSelect: "none", WebkitUserSelect: "none" }}>⠿</span>
+          </Row>
+        </div>
       ))}
       <Row onClick={() => setPlayers([...players, ""])} last>
         <span style={{ width: 26, height: 26, borderRadius: 13, background: C.good, color: "#fff", fontSize: 18, lineHeight: "26px", textAlign: "center" }}>+</span>
@@ -414,7 +435,7 @@ function NewGame({ defaults, onCancel, onCreate, knownNames }) {
         </div>
       )}
 
-      <Section title={`Spieler (${n})`} footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt. Der Spieler an letzter Stelle ist in Runde 1 der Geber. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
+      <Section title={`Spieler (${n})`} footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt – mit ⠿ kannst du sie verschieben. Der Spieler an letzter Stelle ist in Runde 1 der Geber. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
         <PlayerRows players={players} setPlayers={(p) => { setPlayers(p); setError(""); }} showDealer />
       </Section>
       <datalist id="known-names">{knownNames.map((k) => <option key={k} value={k} />)}</datalist>
