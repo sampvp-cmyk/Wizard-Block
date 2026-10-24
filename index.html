@@ -251,11 +251,11 @@ function Choice({ label, desc, selected, onClick }) {
 }
 
 // ── Spieleliste ───────────────────────────────────────────────────────────────
-function GameList({ games, onOpen, onNew }) {
+function GameList({ games, onOpen, onNew, onSettings }) {
   const sorted = [...games].sort((a, b) => b.created - a.created);
   return (
     <div style={page}>
-      <TopBar title="🧙 Wizard Block" right={<IconBtn label="Neues Spiel" onClick={onNew}>＋</IconBtn>} />
+      <TopBar left={<IconBtn label="Einstellungen" onClick={onSettings}>⚙️</IconBtn>} title="🧙 Wizard Block" right={<IconBtn label="Neues Spiel" onClick={onNew}>＋</IconBtn>} />
       {sorted.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 20px", color: C.dim }}>
           <div style={{ fontSize: 64, marginBottom: 12 }}>🔮</div>
@@ -284,22 +284,61 @@ function GameList({ games, onOpen, onNew }) {
   );
 }
 
-// ── Neues Spiel ───────────────────────────────────────────────────────────────
-function NewGame({ onCancel, onCreate, knownNames }) {
-  const [name, setName] = useState("");
-  const [rule, setRule] = useState("standard");
-  const [edition, setEdition] = useState("standard");
-  const [roundsMode, setRoundsMode] = useState("standard");
-  const [customRounds, setCustomRounds] = useState(10);
-  const [players, setPlayers] = useState(["", "", ""]);
+// ── Neues Spiel & Einstellungen ───────────────────────────────────────────────
+const DEFAULTS = { rule: "standard", edition: "standard", roundsMode: "standard", customRounds: 10, players: [] };
+
+const textInput = { flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 16, padding: "6px 0" };
+
+// Regel, Edition und Rundenanzahl – gleich im neuen Spiel und in den Einstellungen
+function GameOptions({ opts, setOpts, playerCount, children }) {
   const [sheet, setSheet] = useState(null);
-  const [error, setError] = useState("");
+  const { rule, edition, roundsMode, customRounds } = opts;
+  const set = (patch) => setOpts({ ...opts, ...patch });
+  const roundsLabel = roundsMode === "custom" ? `${customRounds} Runden` : roundsMode === "all" ? "Alle Karten verteilen" : "Standard";
+  const preview = { players: Array(playerCount).fill(""), edition, roundsMode, customRounds };
 
-  const clean = players.map((p) => p.trim()).filter(Boolean);
-  const n = clean.length;
-  const preview = { players: clean, edition, roundsMode, customRounds };
+  return (
+    <>
+      <Section title="Allgemein">
+        {children}
+        <Row onClick={() => setSheet("rule")}><span style={{ flex: 1 }}>Regel</span><span style={{ color: C.dim }}>{RULES[rule].name} ›</span></Row>
+        <Row onClick={() => setSheet("edition")}><span style={{ flex: 1 }}>Edition</span><span style={{ color: C.dim, textAlign: "right" }}>{EDITIONS[edition].name} ›</span></Row>
+        <Row onClick={() => setSheet("rounds")} last><span style={{ flex: 1 }}>Rundenanzahl</span><span style={{ color: C.dim }}>{roundsLabel}{playerCount >= 3 ? ` (${roundCount(preview)})` : ""} ›</span></Row>
+      </Section>
 
-  const setPlayer = (i, v) => setPlayers(players.map((p, j) => (j === i ? v : p)));
+      {sheet === "rule" && (
+        <Sheet title="Regel wählen" onClose={() => setSheet(null)}>
+          {Object.entries(RULES).map(([id, r]) => <Choice key={id} label={r.name} desc={r.desc} selected={rule === id} onClick={() => { set({ rule: id }); setSheet(null); }} />)}
+        </Sheet>
+      )}
+      {sheet === "edition" && (
+        <Sheet title="Edition auswählen" onClose={() => setSheet(null)}>
+          {Object.entries(EDITIONS).map(([id, e]) => (
+            <Choice key={id} label={e.name} desc={e.specials ? "Mit Sonderkarten: Bombe 💣 und Wolke ☁️ werden beim Ergebnis berücksichtigt." : "Klassisches Spiel mit 60 Karten."}
+              selected={edition === id} onClick={() => { set({ edition: id }); setSheet(null); }} />
+          ))}
+        </Sheet>
+      )}
+      {sheet === "rounds" && (
+        <Sheet title="Wähle die Rundenanzahl" onClose={() => setSheet(null)}>
+          <Choice label="Standard" desc="60 Karten ÷ Spieler (3 → 20, 4 → 15, 5 → 12, 6 → 10, 7 → 8, 8 → 7 Runden …)" selected={roundsMode === "standard"} onClick={() => { set({ roundsMode: "standard" }); setSheet(null); }} />
+          <Choice label="Alle Karten verteilen" desc={`Alle ${EDITIONS[edition].deck} Karten der Edition werden verteilt.`} selected={roundsMode === "all"} onClick={() => { set({ roundsMode: "all" }); setSheet(null); }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, border: `2px solid ${roundsMode === "custom" ? C.accent : C.line}`, background: C.card }}>
+            <div style={{ flex: 1 }} onClick={() => set({ roundsMode: "custom" })}>
+              <div style={{ fontWeight: 600 }}>Eigene Anzahl</div>
+              <div style={{ fontSize: 13, color: C.dim }}>{customRounds} Runden</div>
+            </div>
+            <Stepper value={customRounds} min={1} max={30} onChange={(v) => set({ customRounds: v, roundsMode: "custom" })} />
+          </div>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+// Bearbeitbare Spielerliste mit Entfernen und Verschieben
+function PlayerRows({ players, setPlayers, showDealer, onEdit }) {
+  const setPlayer = (i, v) => { setPlayers(players.map((p, j) => (j === i ? v : p))); onEdit && onEdit(); };
   const move = (i, d) => {
     const j = i + d;
     if (j < 0 || j >= players.length) return;
@@ -307,75 +346,96 @@ function NewGame({ onCancel, onCreate, knownNames }) {
     [next[i], next[j]] = [next[j], next[i]];
     setPlayers(next);
   };
+  return (
+    <>
+      {players.map((p, i) => (
+        <Row key={i}>
+          <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
+          <input style={textInput} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => setPlayer(i, e.target.value)} />
+          {showDealer && i === players.length - 1 && p.trim() && <span style={{ fontSize: 12, color: C.gold }}>Geber</span>}
+          <button aria-label="Nach oben" onClick={() => move(i, -1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▲</button>
+          <button aria-label="Nach unten" onClick={() => move(i, 1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▼</button>
+        </Row>
+      ))}
+      <Row onClick={() => setPlayers([...players, ""])} last>
+        <span style={{ width: 26, height: 26, borderRadius: 13, background: C.good, color: "#fff", fontSize: 18, lineHeight: "26px", textAlign: "center" }}>+</span>
+        <span style={{ color: C.good }}>Neuen Spieler hinzufügen</span>
+      </Row>
+    </>
+  );
+}
+
+function NewGame({ defaults, onCancel, onCreate, knownNames }) {
+  const favorites = defaults.players.map((p) => p.trim()).filter(Boolean);
+  const [name, setName] = useState(() => formatDate(Date.now()));
+  const [opts, setOpts] = useState({ rule: defaults.rule, edition: defaults.edition, roundsMode: defaults.roundsMode, customRounds: defaults.customRounds });
+  const [players, setPlayers] = useState(favorites.length ? [] : ["", "", ""]);
+  const [error, setError] = useState("");
+
+  const clean = players.map((p) => p.trim()).filter(Boolean);
+  const n = clean.length;
+  const picked = (f) => clean.some((p) => p.toLowerCase() === f.toLowerCase());
+
+  // Standardspieler per Tipp an- und abwählen; neue landen hinten (= Geber)
+  const toggleFavorite = (f) => {
+    setError("");
+    if (picked(f)) setPlayers(players.filter((p) => p.trim().toLowerCase() !== f.toLowerCase()));
+    else setPlayers([...players.filter((p) => p.trim()), f]);
+  };
 
   const create = () => {
     if (!name.trim()) return setError("Du musst einen Namen eingeben.");
     if (n < 3) return setError("Wizard spielt man mit mindestens 3 Spielern.");
     if (new Set(clean.map((p) => p.toLowerCase())).size !== n) return setError("Jeder Spieler braucht einen eigenen Namen.");
-    onCreate({ id: String(Date.now()), name: name.trim(), rule, edition, roundsMode, customRounds, players: clean, rounds: [], created: Date.now() });
+    onCreate({ id: String(Date.now()), name: name.trim(), ...opts, players: clean, rounds: [], created: Date.now() });
   };
-
-  const roundsLabel = roundsMode === "custom" ? `${customRounds} Runden` : roundsMode === "all" ? "Alle Karten verteilen" : "Standard";
-  const input = { flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: C.text, fontSize: 16, padding: "6px 0" };
 
   return (
     <div style={page} className="pop">
       <TopBar left={<IconBtn label="Spiele" onClick={onCancel}>‹ Spiele</IconBtn>} title="Neues Spiel" />
-      <Section title="Allgemein">
-        <Row><span style={{ color: C.dim, width: 64 }}>Name</span><input style={input} autoComplete="off" placeholder="z. B. Spieleabend" value={name} onChange={(e) => { setName(e.target.value); setError(""); }} /></Row>
-        <Row onClick={() => setSheet("rule")}><span style={{ flex: 1 }}>Regel</span><span style={{ color: C.dim }}>{RULES[rule].name} ›</span></Row>
-        <Row onClick={() => setSheet("edition")}><span style={{ flex: 1 }}>Edition</span><span style={{ color: C.dim, textAlign: "right" }}>{EDITIONS[edition].name} ›</span></Row>
-        <Row onClick={() => setSheet("rounds")} last><span style={{ flex: 1 }}>Rundenanzahl</span><span style={{ color: C.dim }}>{roundsLabel}{n >= 3 ? ` (${roundCount(preview)})` : ""} ›</span></Row>
-      </Section>
+      <GameOptions opts={opts} setOpts={setOpts} playerCount={n}>
+        <Row><span style={{ color: C.dim, width: 64 }}>Name</span><input style={textInput} autoComplete="off" placeholder="z. B. Spieleabend" value={name} onChange={(e) => { setName(e.target.value); setError(""); }} /></Row>
+      </GameOptions>
 
-      <Section title="Spieler" footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt. Der Spieler an letzter Stelle ist in Runde 1 der Geber. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
-        {players.map((p, i) => (
-          <Row key={i}>
-            <button aria-label="Entfernen" onClick={() => setPlayers(players.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 13, border: "none", background: C.bad, color: "#fff", fontSize: 18, lineHeight: "26px", cursor: "pointer", flexShrink: 0 }}>−</button>
-            <input style={input} autoComplete="off" placeholder={`Spieler ${i + 1}`} value={p} list="known-names" onChange={(e) => { setPlayer(i, e.target.value); setError(""); }} />
-            {i === players.length - 1 && p.trim() && <span style={{ fontSize: 12, color: C.gold }}>Geber</span>}
-            <button aria-label="Nach oben" onClick={() => move(i, -1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▲</button>
-            <button aria-label="Nach unten" onClick={() => move(i, 1)} style={{ background: "none", border: "none", color: C.dim, fontSize: 18, cursor: "pointer", padding: "0 4px" }}>▼</button>
-          </Row>
-        ))}
-        {(
-          <Row onClick={() => setPlayers([...players, ""])} last>
-            <span style={{ width: 26, height: 26, borderRadius: 13, background: C.good, color: "#fff", fontSize: 18, lineHeight: "26px", textAlign: "center" }}>+</span>
-            <span style={{ color: C.good }}>Neuen Spieler hinzufügen</span>
-          </Row>
-        )}
+      {favorites.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ color: C.dim, fontSize: 14, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.6, margin: "0 6px 8px" }}>Standardspieler – antippen zum Auswählen</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {favorites.map((f) => {
+              const on = picked(f);
+              return (
+                <button key={f} onClick={() => toggleFavorite(f)}
+                  style={{ padding: "8px 14px", borderRadius: 20, fontSize: 15, cursor: "pointer", border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent : C.card, color: on ? "#fff" : C.dim }}>
+                  {on ? "✓ " : "+ "}{f}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <Section title={`Spieler (${n})`} footer="Gib die Spieler am besten in der Reihenfolge ein, in der ihr sitzt. Der Spieler an letzter Stelle ist in Runde 1 der Geber. Mehr als 6 Spieler gehen auch – dann gibt es entsprechend weniger Runden.">
+        <PlayerRows players={players} setPlayers={(p) => { setPlayers(p); setError(""); }} showDealer />
       </Section>
       <datalist id="known-names">{knownNames.map((k) => <option key={k} value={k} />)}</datalist>
 
       {error && <div style={{ background: "#f8717122", border: `1px solid ${C.bad}`, color: "#fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 12, textAlign: "center" }}>{error}</div>}
       <BigButton onClick={create} style={{ width: "100%" }}>Spiel erstellen</BigButton>
+    </div>
+  );
+}
 
-      {sheet === "rule" && (
-        <Sheet title="Regel wählen" onClose={() => setSheet(null)}>
-          {Object.entries(RULES).map(([id, r]) => <Choice key={id} label={r.name} desc={r.desc} selected={rule === id} onClick={() => { setRule(id); setSheet(null); }} />)}
-        </Sheet>
-      )}
-      {sheet === "edition" && (
-        <Sheet title="Edition auswählen" onClose={() => setSheet(null)}>
-          {Object.entries(EDITIONS).map(([id, e]) => (
-            <Choice key={id} label={e.name} desc={e.specials ? "Mit Sonderkarten: Bombe 💣 und Wolke ☁️ werden beim Ergebnis berücksichtigt." : "Klassisches Spiel mit 60 Karten."}
-              selected={edition === id} onClick={() => { setEdition(id); setSheet(null); }} />
-          ))}
-        </Sheet>
-      )}
-      {sheet === "rounds" && (
-        <Sheet title="Wähle die Rundenanzahl" onClose={() => setSheet(null)}>
-          <Choice label="Standard" desc="60 Karten ÷ Spieler (3 → 20, 4 → 15, 5 → 12, 6 → 10, 7 → 8, 8 → 7 Runden …)" selected={roundsMode === "standard"} onClick={() => { setRoundsMode("standard"); setSheet(null); }} />
-          <Choice label="Alle Karten verteilen" desc={`Alle ${EDITIONS[edition].deck} Karten der Edition werden verteilt.`} selected={roundsMode === "all"} onClick={() => { setRoundsMode("all"); setSheet(null); }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, border: `2px solid ${roundsMode === "custom" ? C.accent : C.line}`, background: C.card }}>
-            <div style={{ flex: 1 }} onClick={() => setRoundsMode("custom")}>
-              <div style={{ fontWeight: 600 }}>Eigene Anzahl</div>
-              <div style={{ fontSize: 13, color: C.dim }}>{customRounds} Runden</div>
-            </div>
-            <Stepper value={customRounds} min={1} max={30} onChange={(v) => { setCustomRounds(v); setRoundsMode("custom"); }} />
-          </div>
-        </Sheet>
-      )}
+function Settings({ defaults, setDefaults, onBack, knownNames }) {
+  const favorites = defaults.players.map((p) => p.trim()).filter(Boolean);
+  return (
+    <div style={page} className="pop">
+      <TopBar left={<IconBtn label="Spiele" onClick={onBack}>‹ Spiele</IconBtn>} title="Einstellungen" />
+      <div style={{ color: C.dim, fontSize: 14, margin: "0 6px 14px", lineHeight: 1.4 }}>Diese Werte sind bei jedem neuen Spiel schon vorausgewählt. Änderungen werden automatisch gespeichert.</div>
+      <GameOptions opts={defaults} setOpts={setDefaults} playerCount={favorites.length} />
+      <Section title="Standardspieler" footer="Standardspieler erscheinen beim neuen Spiel als Liste zum Antippen.">
+        <PlayerRows players={defaults.players} setPlayers={(players) => setDefaults({ ...defaults, players })} />
+      </Section>
+      <datalist id="known-names">{knownNames.map((k) => <option key={k} value={k} />)}</datalist>
     </div>
   );
 }
@@ -663,12 +723,17 @@ function App() {
 
   const game = view.gameId ? state.games.find((g) => g.id === view.gameId) : null;
   const updateGame = (id, fn) => setState((s) => ({ ...s, games: s.games.map((g) => (g.id === id ? fn(g) : g)) }));
-  const knownNames = [...new Set(state.games.flatMap((g) => g.players))];
+  const defaults = { ...DEFAULTS, ...state.defaults };
+  const knownNames = [...new Set([...defaults.players.map((p) => p.trim()).filter(Boolean), ...state.games.flatMap((g) => g.players)])];
+  const list = <GameList games={state.games} onOpen={(id) => setView({ name: "game", gameId: id })} onNew={() => setView({ name: "new" })} onSettings={() => setView({ name: "settings" })} />;
 
-  if ((view.name === "game" || view.name === "round") && !game) return <GameList games={state.games} onOpen={(id) => setView({ name: "game", gameId: id })} onNew={() => setView({ name: "new" })} />;
+  if ((view.name === "game" || view.name === "round") && !game) return list;
+
+  if (view.name === "settings")
+    return <Settings defaults={defaults} knownNames={knownNames} setDefaults={(d) => setState((s) => ({ ...s, defaults: d }))} onBack={() => setView({ name: "list" })} />;
 
   if (view.name === "new")
-    return <NewGame knownNames={knownNames} onCancel={() => setView({ name: "list" })}
+    return <NewGame defaults={defaults} knownNames={knownNames} onCancel={() => setView({ name: "list" })}
       onCreate={(g) => { setState((s) => ({ ...s, games: [...s.games, g] })); setView({ name: "game", gameId: g.id }); }} />;
 
   if (view.name === "game")
@@ -683,7 +748,7 @@ function App() {
         setView(next !== null ? { name: "round", gameId: game.id, round: next } : { name: "game", gameId: game.id });
       }} />;
 
-  return <GameList games={state.games} onOpen={(id) => setView({ name: "game", gameId: id })} onNew={() => setView({ name: "new" })} />;
+  return list;
 }
 
 ReactDOM.createRoot(document.getElementById("app")).render(<App />);
