@@ -600,7 +600,7 @@ function RoundView({ game, r, onSave, onDraft, onClose }) {
   const [step, setStep] = useState(existing && existing.bidsDone ? "result" : "bids");
   const [revealed, setRevealed] = useState(null);
   const [cloudFor, setCloudFor] = useState(null);
-  const cards = r + 1;
+  const cards = r + 1; // Karten pro Spieler; bei den Stichen begrenzt „+“ auf die noch verfügbaren Stiche
   const dealer = dealerOf(game, r);
   const specials = EDITIONS[game.edition].specials;
   const secret = isSecret(game.rule);
@@ -706,7 +706,7 @@ function RoundView({ game, r, onSave, onDraft, onClose }) {
               return (
                 <Row key={p} last={i === n - 1}>
                   {nameCell(p)}
-                  <Stepper value={rd.tricks[p]} max={cards} onChange={(v) => setAt("tricks", p, v)} />
+                  <Stepper value={rd.tricks[p]} max={Math.max(rd.tricks[p], rd.tricks[p] + need - trickSum)} onChange={(v) => setAt("tricks", p, v)} />
                   <div style={{ minWidth: 62, textAlign: "center" }}>
                     <div style={{ fontSize: 20, fontWeight: 600 }}>{rd.tricks[p]} / {bid}</div>
                     <div style={{ fontSize: 12, color: hit ? C.good : C.bad }}>{roundScore(rd, p) > 0 ? "+" : ""}{roundScore(rd, p)}</div>
